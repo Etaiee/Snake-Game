@@ -1,0 +1,342 @@
+import pygame
+import random
+
+width, height = 1280, 720
+block_size = 20
+wall_blocks = 2
+game_speed = 10
+apples = 3
+snake_length = 3
+speed_change = 1.1
+size_x = width // block_size - wall_blocks * 2
+size_y = height // block_size - wall_blocks * 2
+apple_radius = block_size // 2
+snake_radius = block_size // 4
+font_size = int(wall_blocks * block_size * 0.75)
+
+bg_color = (255, 255, 255)
+snake_color = (0, 255, 0)
+apple_color = (255, 0, 0)
+wall_color = (80, 80, 80)
+text_color = (255, 255, 255)
+eye_color = (0, 0, 0)
+eye_size = block_size // 6
+
+
+def main():
+    screen, clock = pygame_init()
+    game_state = game_init()
+    while game_state['app_running']:
+        clock.tick(game_state['game_speed'])
+        events = get_events()
+        update_game_state(game_state, events, screen)
+        update_screen(screen, game_state)
+    close_app()
+
+
+def close_app():
+    pygame.quit()
+
+
+def pygame_init():
+    pygame.init()
+    screen = pygame.display.set_mode((width, height))
+    pygame.display.set_caption('Змейка')
+    icon = pygame.image.load('icon.png')
+    pygame.display.set_icon(icon)
+    clock = pygame.time.Clock()
+    return screen, clock
+
+
+def game_init():
+    game_state = {
+        'app_running': True,
+        'game_running': False,
+        'game_paused': False,
+        'game_over': False,
+        'game_speed': game_speed,
+        'score': 0,
+        'max_score': 0
+    }
+    return game_state
+
+
+def get_events():
+    events = []
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            events.append('quit')
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_w or event.key == pygame.K_UP:
+                events.append('up')
+            elif event.key == pygame.K_s or event.key == pygame.K_DOWN:
+                events.append('down')
+            elif event.key == pygame.K_d or event.key == pygame.K_RIGHT:
+                events.append('right')
+            elif event.key == pygame.K_a or event.key == pygame.K_LEFT:
+                events.append('left')
+            elif event.key == pygame.K_ESCAPE:
+                events.append('escape')
+            elif event.key == pygame.K_SPACE:
+                events.append('space')
+            elif event.key == pygame.K_RETURN:
+                events.append('enter')
+            elif event.key == pygame.K_BACKSPACE:
+                events.append('backspace')
+    return events
+
+
+def update_game_state(game_state, events, screen):
+    check_key_presses(events, game_state)
+    if game_state['game_running'] and not game_state['game_paused']:
+        snake_move(game_state)
+        check_collisions(game_state, screen)
+        check_apple_eaten(game_state)
+
+
+def check_key_presses(events, game_state):
+    if 'quit' in events:
+        game_state['app_running'] = False
+    elif not game_state['game_running']:
+        if 'escape' in events:
+            game_state['app_running'] = False
+        elif 'enter' in events:
+            new_game_init(game_state)
+            game_state['game_running'] = True
+    elif game_state['game_paused']:
+        if 'escape' in events:
+            game_state['game_running'] = False
+            update_max_score(game_state)
+        elif 'space' in events:
+            game_state['game_paused'] = False
+    else:
+        if 'escape' in events or 'space' in events:
+            game_state['game_paused'] = True
+        if 'up' in events:
+            game_state['direction'] = (0, -1)
+        if 'down' in events:
+            game_state['direction'] = (0, 1)
+        if 'right' in events:
+            game_state['direction'] = (1, 0)
+        if 'left' in events:
+            game_state['direction'] = (-1, 0)
+
+
+def snake_move(game_state):
+    x = game_state['snake'][0][0] + game_state['direction'][0]
+    y = game_state['snake'][0][1] + game_state['direction'][1]
+    game_state['snake'].insert(0, (x, y))
+
+
+def check_collisions(game_state, screen):
+    x, y = game_state['snake'][0]
+    if x < 0 or y < 0 or x >= size_x or y >= size_y:
+        game_state['game_running'] = False
+        if not game_state['game_paused']:
+            game_state['game_over'] = True
+            print_game_over_message(screen)
+        update_max_score(game_state)
+    if len(game_state['snake']) > len(set(game_state['snake'])):
+        game_state['game_running'] = False
+        if not game_state['game_paused']:
+            game_state['game_over'] = True
+            print_game_over_message(screen)
+        update_max_score(game_state)
+
+
+def update_max_score(game_state):
+    if game_state['score'] > game_state['max_score']:
+        game_state['max_score'] = game_state['score']
+
+
+def check_apple_eaten(game_state):
+    apples_eaten = 0
+    for apple in game_state['apples']:
+        if apple == game_state['snake'][0]:
+            game_state['apples'].remove(apple)
+            apples_place(1, game_state)
+            game_state['score'] += 1
+            apples_eaten += 1
+ #           game_state['game_speed'] = round(game_state['game_speed'] * speed_change)
+    if apples_eaten == 0:
+        game_state['snake'].pop()
+
+
+def new_game_init(game_state):
+    game_state['snake'] = []
+    snake_place(snake_length, game_state)
+    game_state['apples'] = []
+    apples_place(apples, game_state)
+    game_state['direction'] = [1, 0]
+    game_state['game_paused'] = False
+    game_state['score'] = 0
+    game_state['game_speed'] = game_speed
+
+
+def apples_place(apples, game_state):
+    for i in range(apples):
+        x = random.randint(0, size_x - 1)
+        y = random.randint(0, size_y - 1)
+        while (x, y) in game_state['apples'] or (x, y) in game_state['snake']:
+            x = random.randint(0, size_x - 1)
+            y = random.randint(0, size_y - 1)
+        game_state['apples'].append((x, y))
+
+
+def snake_place(snake_length, game_state):
+    x = size_x // 2
+    y = size_y // 2
+    game_state['snake'].append((x, y))
+    for i in range(1, snake_length):
+        game_state['snake'].append((x - i, y))
+
+
+def update_screen(screen, game_state):
+    screen.fill((0, 0, 0))
+    if not game_state['game_running']:
+        if game_state['game_over']:
+            print_game_over_message(screen)
+        else:
+            print_new_game_message(screen)
+    elif game_state['game_paused']:
+        print_game_paused_message(screen)
+    else:
+        draw_apples(screen, game_state['apples'])
+        draw_snake(screen, game_state['snake'], game_state['direction'])
+    draw_walls(screen)
+    print_score(screen, game_state['score'])
+    print_max_score(screen, game_state['max_score'])
+    pygame.display.flip()
+
+
+def print_new_game_message(screen):
+    font1 = pygame.font.Font('EpilepsySansBold.ttf', font_size)
+    font2 = pygame.font.Font('EpilepsySansBold.ttf', font_size * 2)
+    text1 = font1.render('Нажмите ESC для выхода из игры', True, text_color)
+    text2 = font1.render('Нажмите ENTER для начала новой игры', True, text_color)
+    text3 = font1.render('Нажмите BACKSPACE, чтобы открыть настройки (WIP)', True, text_color)
+    text4 = font2.render('ЗМЕЙКА <alpha 0.0.1>', True, text_color)
+    text_rect1 = text1.get_rect()
+    text_rect2 = text2.get_rect()
+    text_rect3 = text3.get_rect()
+    text_rect4 = text4.get_rect()
+    text_rect1.center = (width // 2, height // 2 + font_size)
+    text_rect2.center = (width // 2, height // 2 - font_size)
+    text_rect3.center = (width // 2, height // 1.5 - font_size)
+    text_rect4.center = (width // 2, height // 4)
+    screen.blit(text1, text_rect1)
+    screen.blit(text2, text_rect2)
+    screen.blit(text3, text_rect3)
+    screen.blit(text4, text_rect4)
+
+
+def print_game_paused_message(screen):
+    font1 = pygame.font.Font('EpilepsySansBold.ttf', font_size * 2)
+    font2 = pygame.font.Font('EpilepsySansBold.ttf', font_size)
+    text1 = font1.render('ИГРА НА ПАУЗЕ', True, text_color)
+    text2 = font2.render('Нажмите SPACE для продолжения', True, text_color)
+    text3 = font2.render('Нажмите ESC для выхода в меню', True, text_color)
+    text_rect1 = text1.get_rect()
+    text_rect2 = text2.get_rect()
+    text_rect3 = text3.get_rect()
+    text_rect1.center = (width // 2, height // 4)
+    text_rect2.midbottom = (width // 2, height // 2 + font_size)
+    text_rect3.midbottom = (width // 2, height // 2 - font_size)
+    screen.blit(text1, text_rect1)
+    screen.blit(text2, text_rect2)
+    screen.blit(text3, text_rect3)
+
+
+def print_game_over_message(screen):
+    font1 = pygame.font.Font('EpilepsySansBold.ttf', font_size)
+    font2 = pygame.font.Font('EpilepsySansBold.ttf', font_size * 2)
+    text1 = font2.render('ИГРА ОКОНЧЕНА', True, text_color)
+    text2 = font1.render('Вы проиграли :(', True, text_color)
+    text3 = font1.render('Нажмите ENTER для начала новой игры', True, text_color)
+    text4 = font1.render('Нажмите ESC для выхода из игры', True, text_color)
+    text5 = font1.render('Нажмите BACKSPACE, чтобы открыть настройки (WIP)', True, text_color)
+    text_rect1 = text1.get_rect()
+    text_rect2 = text2.get_rect()
+    text_rect3 = text3.get_rect()
+    text_rect4 = text4.get_rect()
+    text_rect5 = text5.get_rect()
+    text_rect1.center = (width // 2, height // 4)
+    text_rect2.center = (width // 2, height // 4 + font_size * 1.5)
+    text_rect3.midbottom = (width // 2, height // 2 - font_size)
+    text_rect4.midbottom = (width // 2, height // 2 + font_size)
+    text_rect5.midbottom = (width // 2, height // 2 + font_size * 3)
+    screen.blit(text1, text_rect1)
+    screen.blit(text2, text_rect2)
+    screen.blit(text3, text_rect3)
+    screen.blit(text4, text_rect4)
+    screen.blit(text5, text_rect5)
+
+
+def draw_apples(screen, apples):
+    for apple in apples:
+        x = apple[0] * block_size + wall_blocks * block_size
+        y = apple[1] * block_size + wall_blocks * block_size
+        pygame.draw.rect(screen, apple_color, rect=((x, y), (block_size, block_size)), border_radius=apple_radius)
+
+
+def draw_snake(screen, snake, direction):
+    for segment in snake:
+        x = segment[0] * block_size + wall_blocks * block_size
+        y = segment[1] * block_size + wall_blocks * block_size
+        pygame.draw.rect(screen, snake_color, rect=((x, y), (block_size, block_size)), border_radius=snake_radius)
+    draw_snake_eyes(screen, snake[0], direction)
+
+
+def draw_snake_eyes(screen, head, direction):
+    wall_size = wall_blocks * block_size
+    eye_offset = block_size // 4
+    x, y = direction[0], direction[1]
+    if x == -1 or y == -1:
+        coord_x = head[0] * block_size + wall_size + eye_offset
+        coord_y = head[1] * block_size + wall_size + eye_offset
+        center = (coord_x, coord_y)
+        pygame.draw.circle(screen, eye_color, center, eye_size)
+    if x == -1 or y == 1:
+        coord_x = head[0] * block_size + wall_size + eye_offset
+        coord_y = head[1] * block_size + wall_size + block_size - eye_offset
+        center = (coord_x, coord_y)
+        pygame.draw.circle(screen, eye_color, center, eye_size)
+    if x == 1 or y == -1:
+        coord_x = head[0] * block_size + wall_size + block_size - eye_offset
+        coord_y = head[1] * block_size + wall_size + eye_offset
+        center = (coord_x, coord_y)
+        pygame.draw.circle(screen, eye_color, center, eye_size)
+    if x == 1 or y == 1:
+        coord_x = head[0] * block_size + wall_size + block_size - eye_offset
+        coord_y = head[1] * block_size + wall_size + block_size - eye_offset
+        center = (coord_x, coord_y)
+        pygame.draw.circle(screen, eye_color, center, eye_size)
+
+
+def draw_walls(screen):
+    wall_size = wall_blocks * block_size
+    pygame.draw.rect(screen, wall_color, ((0, 0), (width, wall_size)))
+    pygame.draw.rect(screen, wall_color, ((0, 0), (wall_size, height)))
+    pygame.draw.rect(screen, wall_color, ((0, height - wall_size), (width, height)))
+    pygame.draw.rect(screen, wall_color, ((width - wall_size, 0), (width, height)))
+
+
+def print_score(screen, score):
+    wall_size = wall_blocks * block_size
+    font = pygame.font.Font('EpilepsySansBold.ttf', font_size)
+    text = font.render('Score: ' + str(score), True, text_color)
+    text_rect = text.get_rect()
+    text_rect.midleft = wall_size, wall_size // 2
+    screen.blit(text, text_rect)
+
+
+def print_max_score(screen, score):
+    wall_size = wall_blocks * block_size
+    font = pygame.font.Font('EpilepsySansBold.ttf', font_size)
+    text = font.render('Max Score: ' + str(score), True, text_color)
+    text_rect = text.get_rect()
+    text_rect.midright = width - wall_size, wall_size // 2
+    screen.blit(text, text_rect)
+
+
+main()
